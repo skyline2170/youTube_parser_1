@@ -6,18 +6,23 @@ import time
 
 import openpyxl
 import pydantic
+import urllib3
 
 from cod import json_validator
 import fake_useragent
 import requests as req
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
 from tqdm import tqdm
 import json_validator
 
 
 class YouTube_Parser:
+
     def __init__(self, url: str, multiproc=False):
+        self.run_check = 0
         self.__multiproc = multiproc
         self.__chanal_url = url
         self.__user_agent = fake_useragent.UserAgent()
@@ -50,8 +55,7 @@ class YouTube_Parser:
                 self.__driver.execute_script("window.scrollBy(0,1000000);")
 
     def get_hrefs(self):
-        ''''Данныя функция получает все ссылки на видео со страницы, открытой в драйвере, который создан в
-            конструкторе класса и сохраняет их в self.href_list'''
+        ''''Данныя функция получает все ссылки на видео со страницы, открытой в драйвере, и сохраняет их в self.href_list'''
         print("Получение ссылок...")
         html_page = self.__driver.find_element(By.XPATH, '//*[@id="contents"]')  # находим div блок с видео
         # html_page = html_page.find_element(By.TAG_NAME, 'div')
@@ -82,11 +86,12 @@ class YouTube_Parser:
         return True
 
     def run(self):
-        '''Данная фукнция получает ссылки на все видео с ютуб канала, адрес которого храниться в self.chanal_url и
-            сохраняет их в self.href_list'''
-        self.__driver = self.__create_driver()
+        '''Данная фукнция '''
+
         try:
-            print("Идёт поиск всех видео канала.")
+            self.__driver = self.__create_driver()
+            print("-" * 40)
+            print(f"Идёт поиск всех видео канала {self.__chanal_url}.")
             self.__driver.get(self.__chanal_url)  # Получение страницы по указанному url
             time.sleep(10)
             self.__driver.find_element(By.XPATH,
@@ -117,58 +122,78 @@ class YouTube_Parser:
                 self.write_to_excel()
             # print(f"время: {datetime.datetime.now() - start}")
 
+        except NoSuchElementException:
+            print("Ошибка Youtube. Повторное подключение.")
+            time.sleep(10)
+            self.run_check += 1
+            if self.__driver:
+                self.__exit_driver()
+            if self.run_check < 5:
+                self.run()
+            else:
+                print("Ошибка подключения")
+        except urllib3.exceptions.NewConnectionError:
+            print("Странная ошибка.")
         except:
             raise
         finally:
-            self.__exit_driver()
+            print("-" * 40)
+            if self.__driver:
+                self.__exit_driver()
 
     def lost_video_checker(self):
         lost = len(self.lost_href_list)
         print(f"Потери {lost}.")
+        time.sleep(0.3)
         if lost:
             self.href_list = self.lost_href_list.copy()
             self.lost_href_list.clear()
             self.pars_title_description(extend_data=True)
             lost2 = len(self.lost_href_list)
-            print(f"Сново потеряно:{lost2}.\n Удалось вернуть: {abs(lost2 - lost)}")
+            print(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
             lost = len(self.lost_href_list)
             if lost:
                 self.href_list = self.lost_href_list.copy()
                 self.lost_href_list.clear()
                 self.pars_title_description(extend_data=True)
                 lost2 = len(self.lost_href_list)
-                print(f"Сново потеряно:{lost2}.\n Удалось вернуть: {abs(lost2 - lost)}")
+                print(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
 
     def pars_title_description(self, extend_data=False):
         print("Полученик данных.")
+
         session = self.__create_session()
         self.lost_href_list.clear()
         if self.href_list:
             for href in tqdm(self.href_list):
-                response = session.get(href, timeout=10)
-                if response.ok:
-                    start_json = response.text.find("var ytInitialData")
-                    raw_json = response.text[
-                               start_json + len("var ytInitialData") + 2:response.text.find("</script>",
-                                                                                            start_json) - 1].strip()  # обрезали лишнее, оставили только json
-                    # try:
-                    data = json_validator.pars_video_data(raw_json)
-                    # self.writer_to_csv((data["name"], href, data["description"]))
-                    if data["name"] and data["description"]:
-                        if extend_data == False:
-                            self.all_video_data_list.append((data["name"], href, data["description"]))
+                try:
+                    response = session.get(href, timeout=10)
+                    if response.ok:
+                        start_json = response.text.find("var ytInitialData")
+                        raw_json = response.text[
+                                   start_json + len("var ytInitialData") + 2:response.text.find("</script>",
+                                                                                                start_json) - 1].strip()  # обрезали лишнее, оставили только json
+                        # try:
+                        data = json_validator.pars_video_data(raw_json)
+                        # self.writer_to_csv((data["name"], href, data["description"]))
+                        if data["name"] and data["description"]:
+                            if extend_data == False:
+                                self.all_video_data_list.append((data["name"], href, data["description"]))
+                            else:
+                                self.all_video_data_list.extend([(data["name"], href, data["description"])])
                         else:
-                            self.all_video_data_list.extend([(data["name"], href, data["description"])])
+                            self.lost_href_list.append(href)
+
+                        # except pydantic.ValidationError as e:
+                        #     print(f"Ошибка {e}")
+                        # except Exception as e:
+                        #     print(f"Ошибка {e}")
+
                     else:
+                        print("Запрос на ютуб не удался")
                         self.lost_href_list.append(href)
-
-                    # except pydantic.ValidationError as e:
-                    #     print(f"Ошибка {e}")
-                    # except Exception as e:
-                    #     print(f"Ошибка {e}")
-
-                else:
-                    print("Запрос на ютуб не удался")
+                except urllib3.exceptions.ConnectTimeoutError:
+                    print("Time out")
                     self.lost_href_list.append(href)
             # print(self.all_video_data)
             # self.write_to_excel()
@@ -179,30 +204,34 @@ class YouTube_Parser:
 
     @staticmethod
     def process(session, href, x: list, y: list):
-        response = session.get(href, timeout=10)
-        if response.ok:
-            start = response.text.find("var ytInitialData")
-            page_json = response.text[
-                        start + len("var ytInitialData") + 2:response.text.find("</script>",
-                                                                                start) - 1].strip()  # обрезали лишнее,
-            # оставили только json
-            # try:
-            data = json_validator.pars_video_data(page_json)  # pars_video_data учитывает ошибки валидации
-            if data["name"] and data["description"]:
-                x.append((data["name"], href, data["description"]))
-            else:
-                y.append(href)
+        try:
+            response = session.get(href, timeout=10)
+            if response.ok:
+                start = response.text.find("var ytInitialData")
+                page_json = response.text[
+                            start + len("var ytInitialData") + 2:response.text.find("</script>",
+                                                                                    start) - 1].strip()  # обрезали лишнее,
+                # оставили только json
+                # try:
+                data = json_validator.pars_video_data(page_json)  # pars_video_data учитывает ошибки валидации
+                if data["name"] and data["description"]:
+                    x.append((data["name"], href, data["description"]))
+                else:
+                    y.append(href)
 
-            # except Exception as e:
-            #     print(f"Ошибка Exception: {e}")
-            # except pydantic.ValidationError as e:
-            #     print(f"Ошибка валидации: {e}")
-        else:
-            print("Запрос на ютуб не удался")
+                # except Exception as e:
+                #     print(f"Ошибка Exception: {e}")
+                # except pydantic.ValidationError as e:
+                #     print(f"Ошибка валидации: {e}")
+            else:
+                print("Запрос на ютуб не удался")
+                y.append(href)
+        except urllib3.exceptions.ConnectTimeoutError:
+            print("Time out")
             y.append(href)
 
     def pars_title_description_multiprocess(self, extend_data=False):
-        print("Полученик данных.")
+        print("Получение данных.")
         session = self.__create_session()
         self.lost_href_list.clear()
         if self.href_list:
@@ -244,6 +273,9 @@ class YouTube_Parser:
             sheat.cell(row=row, column=2).value = i[1]
             sheat.cell(row=row, column=3).value = i[2]
             row += 1
+        # list_shets = work_book.sheetnames
+        # print(list_shets)
+
         work_book.save(f"../data/{dir_name}/{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.xlsx")
 
     # def create_new_csv(self):
@@ -276,12 +308,12 @@ class YouTube_Parser:
 
     def __create_session(self):
         session = req.Session()
-        # session.headers.update({"user-name": self.__user_agent.chrome, "accept": "/"})
+        session.headers.update({"user-name": self.__user_agent.chrome, "accept": "/"})
         return session
 
     def __exit_driver(self):
         if self.__driver:
-            self.__driver.close()
+            # self.__driver.close()
             self.__driver.quit()
 
     # def __del__(self):
@@ -291,14 +323,22 @@ class YouTube_Parser:
 
 if __name__ == '__main__':
     check_list = ("https://www.youtube.com/c/MeDallisTRoyale",
-
-    "https://www.youtube.com/c/QuantumGames",
-    # # "https://www.youtube.com/c/MeDallisTRoyale")
-    "https://www.youtube.com/c/gosha_dudar",
-    "https://www.youtube.com/c/PhysicsisSimple",
-    "https://www.youtube.com/c/kuplinovplay")
+                  "https://www.youtube.com/c/ZProgerIT",
+                  "https://www.youtube.com/c/Redlyy",
+                  "https://www.youtube.com/c/QuantumGames",
+                  "https://www.youtube.com/c/PhysicsisSimple",
+                  "https://www.youtube.com/c/gosha_dudar",
+                  "https://www.youtube.com/c/PhysicsisSimple",
+                  "https://www.youtube.com/c/kuplinovplay")
+    # "https://www.youtube.com/user/Wylsacom",
+    # "https://www.youtube.com/user/AcademeG",
+    # "https://www.youtube.com/c/SuperCrastan",
+    # "https://www.youtube.com/channel/UCBUPvbjvN6Raly2FL14xoYw",
+    # "https://www.youtube.com/c/JoeSpeen",
+    # "https://www.youtube.com/channel/UCfFkXO1Tfk6Je9O5h-dvLoA")
     with open("test_otchet.txt", "w") as file:
         for url in check_list:
+            start = datetime.datetime.now()
             try:
                 parser = YouTube_Parser(url, multiproc=True)
                 parser.run()
@@ -306,11 +346,12 @@ if __name__ == '__main__':
             except Exception as e:
                 file.write(f"{url} - false\n")
                 print(f"Ошибка {e}")
-                raise
+                # raise
             except:
                 file.write(f"{url} - false\n")
                 print("какая-то другая ошибка")
                 raise
+            print(f"Время на парсинг {url} = {datetime.datetime.now() - start}")
 
     token = "5226592225:AAGuyEtD_FOotorITU45tTNOLWhEcR2htVA"
     chat_id = "488216212"
