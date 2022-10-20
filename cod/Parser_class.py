@@ -16,6 +16,7 @@ from tqdm import tqdm
 import json_validator
 from loguru import logger
 
+
 class YouTube_Parser:
     def __init__(self, url: str, multiproc=False):
         self.__multiproc = multiproc
