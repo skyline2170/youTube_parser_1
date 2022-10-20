@@ -14,7 +14,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from tqdm import tqdm
 import json_validator
-from loguru import logger
 
 
 class YouTube_Parser:
@@ -23,7 +22,6 @@ class YouTube_Parser:
         self.__chanal_url = url
         self.__user_agent = fake_useragent.UserAgent()
         self.__driver = None
-
         self.href_list = []
         self.all_video_data_list = []
         self.lost_href_list = []
@@ -240,8 +238,8 @@ class YouTube_Parser:
 
         row = 2
         for i in self.all_video_data_list:
-            print(i)
-            print(type(i))
+            # print(i)
+            # print(type(i))
             sheat.cell(row=row, column=1).value = i[0]
             sheat.cell(row=row, column=2).value = i[1]
             sheat.cell(row=row, column=3).value = i[2]
