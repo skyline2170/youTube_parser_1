@@ -1,3 +1,4 @@
+import cProfile
 import csv
 import datetime
 import multiprocessing
@@ -5,10 +6,10 @@ import os.path
 import time
 
 import openpyxl
-import pydantic
+
 import urllib3
 
-from cod import json_validator
+
 import fake_useragent
 import requests as req
 
@@ -39,7 +40,8 @@ class YouTube_Parser:
         k = 0  # старое количество страниц
         check = 0
         while True:  # цикл пролистывает страницу до конца
-            time.sleep(3)
+            # time.sleep(3)
+            time.sleep(0.5)
             hrefs = self.__driver.find_elements(By.TAG_NAME, "a")
             if len(hrefs) == k:
                 check += 1
@@ -99,10 +101,13 @@ class YouTube_Parser:
 
             self.page_scroller()  # пролистываем страницу до конца
             self.page_source = self.__driver.page_source
-            with open("../data/htlm.txt", "w", encoding="utf-8") as file:
-                file.write(self.page_source)
+            # with open("../data/htlm.txt", "w", encoding="utf-8") as file:
+            #     file.write(self.page_source)
 
             check = self.get_hrefs()
+
+            # print("set",set(self.href_list))
+            # print(len(set(self.href_list)))
 
             if check == None:
                 print("Повтор получения ссылок.")
@@ -158,9 +163,16 @@ class YouTube_Parser:
                 self.pars_title_description(extend_data=True)
                 lost2 = len(self.lost_href_list)
                 print(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
+                lost = len(self.lost_href_list)
+                if lost:
+                    self.href_list = self.lost_href_list.copy()
+                    self.lost_href_list.clear()
+                    self.pars_title_description(extend_data=True)
+                    lost2 = len(self.lost_href_list)
+                    print(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
 
     def pars_title_description(self, extend_data=False):
-        print("Полученик данных.")
+        print("Получение данных.")
 
         session = self.__create_session()
         self.lost_href_list.clear()
@@ -173,21 +185,37 @@ class YouTube_Parser:
                         raw_json = response.text[
                                    start_json + len("var ytInitialData") + 2:response.text.find("</script>",
                                                                                                 start_json) - 1].strip()  # обрезали лишнее, оставили только json
-                        # try:
+
                         data = json_validator.pars_video_data(raw_json)
                         # self.writer_to_csv((data["name"], href, data["description"]))
-                        if data["name"] and data["description"]:
-                            if extend_data == False:
-                                self.all_video_data_list.append((data["name"], href, data["description"]))
-                            else:
-                                self.all_video_data_list.extend([(data["name"], href, data["description"])])
-                        else:
-                            self.lost_href_list.append(href)
 
-                        # except pydantic.ValidationError as e:
-                        #     print(f"Ошибка {e}")
-                        # except Exception as e:
-                        #     print(f"Ошибка {e}")
+                        match (data["name"], data["description"]):
+                            case (str(), str()):
+                                if extend_data == False:
+                                    self.all_video_data_list.append((data["name"], href, data["description"]))
+                                else:
+                                    self.all_video_data_list.extend([(data["name"], href, data["description"])])
+                            case (None, str()):
+                                self.lost_href_list.append(href)
+                            case (str(), None):
+                                data["description"] = self.find_problem_discription(session, href)
+                                if extend_data == False:
+                                    self.all_video_data_list.append((data["name"], href, data["description"]))
+                                else:
+                                    self.all_video_data_list.extend([(data["name"], href, data["description"])])
+                            case None, None:
+                                self.lost_href_list.append(href)
+                        # print("data[name]=", data['name'], "     data[description]=", data["description"])
+
+                        # if data["name"] and data["description"]:
+                        #     # print("data[name]=", data['name'], "     data[description]=", data["description"])
+                        #     if extend_data == False:
+                        #         self.all_video_data_list.append((data["name"], href, data["description"]))
+                        #     else:
+                        #         self.all_video_data_list.extend([(data["name"], href, data["description"])])
+                        # else:
+                        #     # print("data[name]=", data['name'], "     data[description]=", data["description"])
+                        #     self.lost_href_list.append(href)
 
                     else:
                         print("Запрос на ютуб не удался")
@@ -199,11 +227,28 @@ class YouTube_Parser:
             # self.write_to_excel()
         else:
             print("Список с ссылками пуст")
-        if session:
-            session.close()
+        # if session:
+        #     session.close()
 
     @staticmethod
-    def process(session, href, x: list, y: list):
+    def find_problem_discription(session, problem_url):
+        try:
+            response = session.get(problem_url)
+            html = response.text
+            data = None
+            start = html.find("shortDescription")
+            finish = html.find("isCrawlable")
+            if start and finish and (finish > start):
+                data = html[start + len("shortDescription") + 2:finish - 2]
+                if data:
+                    data = data.replace(r"\n\n", r"\n").replace(r"\n", "\n")
+                    # print(data)
+            return data
+        except:
+            return None
+
+    @staticmethod
+    def process(session, href, x: list, y: list, func):
         try:
             response = session.get(href, timeout=10)
             if response.ok:
@@ -212,17 +257,24 @@ class YouTube_Parser:
                             start + len("var ytInitialData") + 2:response.text.find("</script>",
                                                                                     start) - 1].strip()  # обрезали лишнее,
                 # оставили только json
-                # try:
                 data = json_validator.pars_video_data(page_json)  # pars_video_data учитывает ошибки валидации
-                if data["name"] and data["description"]:
-                    x.append((data["name"], href, data["description"]))
-                else:
-                    y.append(href)
 
-                # except Exception as e:
-                #     print(f"Ошибка Exception: {e}")
-                # except pydantic.ValidationError as e:
-                #     print(f"Ошибка валидации: {e}")
+                match (data["name"], data["description"]):
+                    case (str(), str()):
+                        x.append((data["name"], href, data["description"]))
+                    case (None, str()):
+                        y.append(href)
+                    case (str(), None):
+                        data["description"] = func(session, href)
+                        x.append((data["name"], href, data["description"]))
+                    case None, None:
+                        y.append(href)
+                # print("data[name]=", data['name'], "     data[description]=", data["description"])
+
+                # if data["name"] or data["description"]:
+                #     x.append((data["name"], href, data["description"]))
+                # else:
+                #     y.append(href)
             else:
                 print("Запрос на ютуб не удался")
                 y.append(href)
@@ -238,12 +290,13 @@ class YouTube_Parser:
             with multiprocessing.Manager() as manager:
                 x = manager.list()
                 y = manager.list()
-                href_list = [(session, i, x, y) for i in self.href_list]
+                href_list = [(session, i, x, y, self.find_problem_discription) for i in self.href_list]
 
                 with multiprocessing.Pool(multiprocessing.cpu_count() * 3) as pool:
                     pool.starmap(self.process, href_list)
                     pool.close()
                     pool.join()
+                print("попа")
                 if extend_data == False:
                     self.all_video_data_list = list(x)
                 else:
@@ -251,15 +304,24 @@ class YouTube_Parser:
                 self.lost_href_list = list(y)
         else:
             print("Список с ссылками пуст")
-        if session:
-            session.close()
+        # if session:
+        #     session.close()
+
+    @staticmethod
+    def write_list(data_list, path):
+        data_list = [i + "\n" for i in data_list]
+        with open(f"{path}/потеряные ссылки.txt", "w", encoding="utf-8") as file:
+            file.writelines(data_list)
 
     def write_to_excel(self):
         dir_name = self.__chanal_url.removeprefix('https://www.youtube.com/c/')
+        dir_name = dir_name.replace("/", "_")
+        time = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
         if not os.path.exists(f"../data/{dir_name}"):
             os.mkdir(f"../data/{dir_name}")
+        os.mkdir(f"../data/{dir_name}/{time}")
         work_book = openpyxl.Workbook()
-        sheat = work_book.create_sheet(title="data")
+        sheat = work_book["Sheet"]
 
         sheat["A1"] = "Название"
         sheat["B1"] = "Ссылка"
@@ -275,8 +337,9 @@ class YouTube_Parser:
             row += 1
         # list_shets = work_book.sheetnames
         # print(list_shets)
-
-        work_book.save(f"../data/{dir_name}/{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.xlsx")
+        work_book.save(f"../data/{dir_name}/{time}/excel.xlsx")
+        if self.lost_href_list:
+            self.write_list(self.lost_href_list, f"../data/{dir_name}/{time}")
 
     # def create_new_csv(self):
     #     dir_name = self.__chanal_url.removeprefix('https://www.youtube.com/c/')
@@ -296,7 +359,7 @@ class YouTube_Parser:
     def __create_driver(self, driver_path: str = "../chromedriver.exe"):
         if os.path.exists(driver_path):
             driver_options = webdriver.ChromeOptions()
-            # driver_options.add_argument("--headless")
+            driver_options.add_argument("--headless")
 
             driver_options.add_argument("--disable-blink-features=AutoControled")
             driver_options.add_argument(f"user-agent={self.__user_agent.chrome}")
@@ -321,47 +384,76 @@ class YouTube_Parser:
     #         self.__exit_driver()
 
 
-if __name__ == '__main__':
-    check_list = ("https://www.youtube.com/c/MeDallisTRoyale",
-                  "https://www.youtube.com/c/ZProgerIT",
-                  "https://www.youtube.com/c/Redlyy",
-                  "https://www.youtube.com/c/QuantumGames",
-                  "https://www.youtube.com/c/PhysicsisSimple",
-                  "https://www.youtube.com/c/gosha_dudar",
-                  "https://www.youtube.com/c/PhysicsisSimple",
-                  "https://www.youtube.com/c/kuplinovplay")
-    # "https://www.youtube.com/user/Wylsacom",
-    # "https://www.youtube.com/user/AcademeG",
-    # "https://www.youtube.com/c/SuperCrastan",
-    # "https://www.youtube.com/channel/UCBUPvbjvN6Raly2FL14xoYw",
-    # "https://www.youtube.com/c/JoeSpeen",
-    # "https://www.youtube.com/channel/UCfFkXO1Tfk6Je9O5h-dvLoA")
+def main():
+    all_start = datetime.datetime.now()
+    check_list = (
+        "https://www.youtube.com/c/MeDallisTRoyale",
+        # "https://www.youtube.com/с/Wylsacom",
+        # "https://www.youtube.com/с/AcademeG",
+        # "https://www.youtube.com/c/SuperCrastan",
+        # "https://www.youtube.com/с/UCBUPvbjvN6Raly2FL14xoYw",
+        # "https://www.youtube.com/c/JoeSpeen",
+        # "https://www.youtube.com/c/UCfFkXO1Tfk6Je9O5h-dvLoA",
+        #               "https://www.youtube.com/c/ZProgerIT",
+        #               "https://www.youtube.com/c/Redlyy",
+        #               "https://www.youtube.com/c/QuantumGames",
+        #               "https://www.youtube.com/c/PhysicsisSimple"
+        #               "https://www.youtube.com/c/gosha_dudar",
+        #               "https://www.youtube.com/c/kuplinovplay"
+    )
     with open("test_otchet.txt", "w") as file:
         for url in check_list:
             start = datetime.datetime.now()
             try:
                 parser = YouTube_Parser(url, multiproc=True)
                 parser.run()
+
+                print("статистика:")
+                print(len(parser.all_video_data_list))
+                x = [i[0] for i in parser.all_video_data_list]
+                y = [i[1] for i in parser.all_video_data_list]
+                z = [i[2] for i in parser.all_video_data_list]
+                print("Длины:", len(x), len(y), len(z))
+                x = set(x)
+                y = set(y)
+                z = set(z)
+                print("Длины:", len(x), len(y), len(z))
+
                 file.write(f"{url} - true\n")
             except Exception as e:
                 file.write(f"{url} - false\n")
                 print(f"Ошибка {e}")
-                # raise
+                raise
             except:
                 file.write(f"{url} - false\n")
-                print("какая-то другая ошибка")
+                print("Неожиданная ошибка")
                 raise
             print(f"Время на парсинг {url} = {datetime.datetime.now() - start}")
 
     token = "5226592225:AAGuyEtD_FOotorITU45tTNOLWhEcR2htVA"
     chat_id = "488216212"
     res = req.get("https://api.telegram.org/bot" + token + "/sendMessage",
-                  params={"chat_id": "488216212", "text": "программа завершена"})
+                  params={"chat_id": chat_id, "text": "программа завершена"})
     print("-" * 10)
     print(f"{res.ok=}")
     print("программа завершена!")
-
+    print("затрачено времени:", datetime.datetime.now() - all_start)
     # for i in range(15):
-    #     x = YouTube_Parser("https://www.youtube.com/c/MeDallisTRoyale")
-    #     x.pars_title_description(("https://www.youtube.com/watch?v=OXdzJx0-AW8",))
-    #     del x
+    # x = YouTube_Parser("https://www.youtube.com/c/MeDallisTRoyale")
+    # r = x.pars_title_description(("https://www.youtube.com/watch?v=yOvvtKRBzQU",))
+    # del x
+
+
+if __name__ == '__main__':
+    # import pstats
+    #
+    # # cProfile.run("main()", sort="cumtime")
+    # profiler = cProfile.Profile()
+    # profiler.enable()
+    # main()
+    # profiler.disable()
+    # stat = pstats.Stats(profiler).sort_stats("cumtime")
+    # stat.strip_dirs()
+    # stat.print_stats()
+    # stat.dump_stats("1.prof")
+    main()

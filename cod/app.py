@@ -1,58 +1,101 @@
-import time
+import datetime
 import tkinter as tk
+from tkinter import messagebox as mb
+from tkinter import filedialog as fd
+import controler
+import threading as th
+import my_exception
+from loguru import logger
+import multiprocessing as mp
+
+root = tk.Tk()
+root.title("YouTube Parser")
+# root.resizable(False, False)
+root.geometry("550x350+100+100")
+
+process_list: list[mp.Process] = []
 
 
-def button_parse_button_func(b1: tk.Button, root: tk.Tk, radio_button):
-    b1.config(text="попа")
-    root.update()
-    print(radio_button.get())
+def func_button_pars(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
+    try:
+        text_palace.delete(1.0, tk.END)
+        controler.func_pars(rad, entry, text_palace, process_list)
+    except my_exception.Url_Error_Domen as e:
+        text_palace.insert(1.0, f"{e}")
+    except FileNotFoundError:
+        text_palace.insert(1.0, "Не правильный путь к файлу.")
+    except IndexError:
+        # raise
+        text_palace.insert(1.0, "Вы не ввели ссылку.")
+    except my_exception.Sruct_File_Error:
+        text_palace.insert(1.0, "Не верная структура файла.")
+    except my_exception.Not_file:
+        text_palace.insert(1.0, "Файл не выбран.")
+    except OSError:
+        text_palace.insert(1.0, "Не правильный путь к файлу.")
+    except:
+        # text_palace.insert(1.0, "Не предвиденная ошибка.")
+        raise
+
+    # controler.func_pars(rad, entry)
 
 
-# def button_parse_button_func(b1: tk.Button, root: tk.Tk):
-#     b1.config(text="попа")
-#     root.update()
+def func_button_cancel():
+    print(process_list)
+    if process_list:
+        for i in process_list:
+            i.terminate()
 
 
-def main_window_create():
-    root = tk.Tk()
-    root.geometry("300x300+100+100")
-    root.title("You_Tube parser")
-    # root.resizable(False,False)
 
-    lable_1 = tk.Label(root, text="Введите ссылку")
-
-    entry_1 = tk.Entry(justify=tk.CENTER)
-
-    frame = tk.Frame(root, background="green")
-    frame_radio_button_1 = tk.Frame(root)
-
-    button_pars = tk.Button(frame, text="Начать парсить",
-                            command=lambda: button_parse_button_func(button_cancel, root, r_var1))
-    button_cancel = tk.Button(frame, text="Отмена")
-
-    r_var1 = tk.IntVar()
-    r_var1.set(0)
-    radio_button_url = tk.Radiobutton(frame_radio_button_1, text="url", variable=r_var1, value=0)
-    radio_button_file = tk.Radiobutton(frame_radio_button_1, text="file", variable=r_var1, value=1)
-    radio_button_lost_list = tk.Radiobutton(frame_radio_button_1, text="lost_list", variable=r_var1, value=2)
-
-    button_pars.pack(side=tk.LEFT, padx=10, pady=10)
-    button_cancel.pack(side=tk.LEFT, padx=10, pady=10)
-
-    radio_button_url.pack(side=tk.LEFT, padx=10, pady=10)
-    radio_button_file.pack(side=tk.LEFT, padx=10, pady=10)
-    radio_button_lost_list.pack(side=tk.LEFT, padx=10, pady=10)
-
-    lable_1.pack()
-    entry_1.pack()
-    frame_radio_button_1.pack()
-    frame.pack()
-    return root
+def func_button_file(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
+    text_palace.delete(1.0, tk.END)
+    mb_file = fd.askopenfilename()
+    entry.delete(0, tk.END)
+    entry.insert(0, mb_file)
 
 
-def main():
-    main_window_create().mainloop()
+def func_radiobutton_file_lost_file(button_1, window):
+    button_1.pack(side=tk.LEFT)
+    label_1.config(text="Название файла")
+    window.update()
 
+
+def func_rediobutton_pars(button_1: tk.Button, window):
+    button_1.pack_forget()
+    label_1.config(text="Введите ссылку")
+    window.update()
+
+
+label_1 = tk.Label(root, text="Введите ссылку")
+entry_url = tk.Entry(root, justify=tk.CENTER, width=70)
+
+radiobutton_frame = tk.Frame(root)
+r_var_1 = tk.IntVar()
+r_var_1.set(0)
+radiobutton_url = tk.Radiobutton(radiobutton_frame, text="url", variable=r_var_1, value=0,
+                                 command=lambda: func_rediobutton_pars(button_file, root))
+radiobutton_file = tk.Radiobutton(radiobutton_frame, text="file", variable=r_var_1, value=1,
+                                  command=lambda: func_radiobutton_file_lost_file(button_file, root))
+
+button_frame = tk.Frame(root)
+button_pars = tk.Button(button_frame, text="Начать парсинг",
+                        command=lambda: func_button_pars(text_place, entry_url, r_var_1))
+button_cancel = tk.Button(button_frame, text="Отмена",command=func_button_cancel)
+button_file = tk.Button(button_frame, text="Выберите файл",
+                        command=lambda: func_button_file(text_place, entry_url, r_var_1))
+
+text_place = tk.Text(root, width=60, height=15, wrap=tk.WORD)
+
+label_1.pack()
+entry_url.pack()
+radiobutton_frame.pack()
+radiobutton_url.pack(side=tk.LEFT)
+radiobutton_file.pack(side=tk.LEFT)
+button_frame.pack()
+button_pars.pack(side=tk.LEFT, padx=10, pady=10)
+button_cancel.pack(side=tk.LEFT, padx=10, pady=10)
+text_place.pack()
 
 if __name__ == '__main__':
-    main()
+    root.mainloop()

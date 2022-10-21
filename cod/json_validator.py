@@ -1,8 +1,13 @@
+import json
+
 import requests as req
 import pydantic
 from loguru import logger
 
 # region Логирование
+
+logger.remove()
+logger.add("log_error.log", level="ERROR", encoding="utf-8")
 logger.remove()
 logger.debug("-" * 50)
 logger.debug(f"Проверка работы {__file__}")
@@ -18,7 +23,7 @@ class F33(pydantic.BaseModel):
 
 
 class F22(pydantic.BaseModel):
-    runs: list[F33]
+    runs: list[F33, ...]
 
 
 class F11(pydantic.BaseModel):
@@ -34,7 +39,7 @@ class Title_video_3(pydantic.BaseModel):
 
 
 class Title_video_2(pydantic.BaseModel):
-    runs: list[Title_video_3]
+    runs: list[Title_video_3, ...]
 
 
 class Title_video_0(pydantic.BaseModel):
@@ -68,6 +73,8 @@ class Json_Data(pydantic.BaseModel):
 # endregion xth
 
 def pars_video_data(page_json: str):
+    video_name = None
+    video_description = None
     # response = req.get(url)  # получаем станичку
     # if response.ok:
     try:
@@ -105,17 +112,22 @@ def pars_video_data(page_json: str):
 
         logger.debug(f"{video_description=}")
 
-        return {"name": video_name, "description": video_description}  # ???????????????????????????
+
 
     except pydantic.ValidationError as e:
-        logger.debug(f"{e.json()=}")
+        logger.error(f"{e.json()=}")
+        # print(e.json())
         logger.debug("Некорекный json.Не удалость провалидировань данные.")
-        return {"name": None, "description": None}
+        logger.error("Некорекный json.Не удалость провалидировань данные.")
+        # return {"name": None, "description": None}
         # raise
     except:
         logger.debug("Неизвестная ошибка")
-        return {"name": None, "description": None}
+        logger.error("Неизвестная ошибка")
+        # return {"name": None, "description": None}
         # raise
+    finally:
+        return {"name": video_name, "description": video_description}
 
 
 # else:
@@ -125,5 +137,8 @@ def pars_video_data(page_json: str):
 
 if __name__ == '__main__':
     pass
-    # x = pars_video_data("https://www.youtube.com/watch?v=SH8j2fPio9k")
-    # logger.debug(f"{x=}")
+    # x = 12
+    # logger.error(f"{x=}")
+    # with open("../t.json", "r", encoding="utf-8") as file:
+    #     x = file.write()
+    # pars_video_data(x)
