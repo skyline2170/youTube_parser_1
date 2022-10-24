@@ -118,6 +118,7 @@ def f1(server, text):
             return
 
 
+
 def func_pars(radiobutton: tkinter.IntVar, data: tkinter.Entry, text: tkinter.Text):
     data = data.get()
 
