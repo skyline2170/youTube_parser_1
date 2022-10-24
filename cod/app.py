@@ -1,4 +1,6 @@
+import cProfile
 import datetime
+import pstats
 import tkinter as tk
 from tkinter import messagebox as mb
 from tkinter import filedialog as fd
@@ -13,13 +15,11 @@ root.title("YouTube Parser")
 # root.resizable(False, False)
 root.geometry("550x350+100+100")
 
-process_list: list[mp.Process] = []
-
 
 def func_button_pars(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
     try:
         text_palace.delete(1.0, tk.END)
-        controler.func_pars(rad, entry, text_palace, process_list)
+        controler.func_pars(rad, entry, text_palace)
     except my_exception.Url_Error_Domen as e:
         text_palace.insert(1.0, f"{e}")
     except FileNotFoundError:
@@ -41,11 +41,8 @@ def func_button_pars(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
 
 
 def func_button_cancel():
-    print(process_list)
-    if process_list:
-        for i in process_list:
-            i.terminate()
-
+    # print(process_list)
+    controler.kill_process()
 
 
 def func_button_file(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
@@ -81,7 +78,7 @@ radiobutton_file = tk.Radiobutton(radiobutton_frame, text="file", variable=r_var
 button_frame = tk.Frame(root)
 button_pars = tk.Button(button_frame, text="Начать парсинг",
                         command=lambda: func_button_pars(text_place, entry_url, r_var_1))
-button_cancel = tk.Button(button_frame, text="Отмена",command=func_button_cancel)
+button_cancel = tk.Button(button_frame, text="Отмена", command=func_button_cancel)
 button_file = tk.Button(button_frame, text="Выберите файл",
                         command=lambda: func_button_file(text_place, entry_url, r_var_1))
 
@@ -98,4 +95,8 @@ button_cancel.pack(side=tk.LEFT, padx=10, pady=10)
 text_place.pack()
 
 if __name__ == '__main__':
+    profiler = cProfile.Profile()
+    profiler.enable()
     root.mainloop()
+    profiler.disable()
+    print(pstats.Stats(profiler).sort_stats("ncalls").strip_dirs())

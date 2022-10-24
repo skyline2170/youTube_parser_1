@@ -9,7 +9,6 @@ import openpyxl
 
 import urllib3
 
-
 import fake_useragent
 import requests as req
 
@@ -87,13 +86,16 @@ class YouTube_Parser:
         # print(self.href_list)
         return True
 
-    def run(self):
-        '''Данная фукнция '''
+    def run(self, pipe_client=None):
+        # '''Данная фукнция '''
 
         try:
             self.__driver = self.__create_driver()
             print("-" * 40)
             print(f"Идёт поиск всех видео канала {self.__chanal_url}.")
+            if pipe_client:
+                pipe_client.send(f"Идёт поиск всех видео канала {self.__chanal_url}.")
+
             self.__driver.get(self.__chanal_url)  # Получение страницы по указанному url
             time.sleep(10)
             self.__driver.find_element(By.XPATH,
@@ -113,6 +115,8 @@ class YouTube_Parser:
                 print("Повтор получения ссылок.")
                 self.href_list.clear()
                 check = self.get_hrefs()
+            if pipe_client:
+                pipe_client.send(f"Ссылки полученны")
 
             if self.__multiproc == False:
                 self.pars_title_description()
@@ -122,7 +126,8 @@ class YouTube_Parser:
                 pass
 
             self.lost_video_checker()
-
+            if pipe_client:
+                pipe_client.send(f"Запись результатов в таблицу Excel")
             if self.all_video_data_list and self.__multiproc != None:
                 self.write_to_excel()
             # print(f"время: {datetime.datetime.now() - start}")
@@ -143,6 +148,7 @@ class YouTube_Parser:
             raise
         finally:
             print("-" * 40)
+            pipe_client.send(f"Конец")
             if self.__driver:
                 self.__exit_driver()
 
@@ -296,7 +302,7 @@ class YouTube_Parser:
                     pool.starmap(self.process, href_list)
                     pool.close()
                     pool.join()
-                print("попа")
+
                 if extend_data == False:
                     self.all_video_data_list = list(x)
                 else:

@@ -1,14 +1,26 @@
+import multiprocessing
+import threading
+
 import Parser_class
 import tkinter
 import my_exception
 import datetime
 import multiprocessing as mp
 
+process_list: list[mp.Process] = []
+
+
+def kill_process():
+    if process_list:
+        for i in process_list:
+            i.terminate()
+
 
 def validate_file(path_name: str):
     try:
         with open(path_name, "r", encoding="utf-8") as file:  # "FileNotFoundError"
             input_date = file.readlines()
+        input_date = [i.removesuffix("\n") for i in input_date]
         for i in input_date:
             validate_url(i)
         return input_date
@@ -35,13 +47,13 @@ def validate_url(url: str):
         raise IndexError
 
 
-def func_button_pars_url(url):
+def func_button_pars_url(url, pipe_client):
     check = True
     while check:
         start = datetime.datetime.now()
         try:
             parser = Parser_class.YouTube_Parser(url, multiproc=True)
-            parser.run()
+            parser.run(pipe_client)
 
             print("статистика:")
             print(len(parser.all_video_data_list))
@@ -64,7 +76,7 @@ def func_button_pars_url(url):
         print(f"Время на парсинг {url} = {datetime.datetime.now() - start}")
 
 
-def func_button_pars_file(href_list):
+def func_button_pars_file(href_list, pipe_client):
     if href_list:
         for url in href_list:
             check = True
@@ -72,7 +84,7 @@ def func_button_pars_file(href_list):
                 start = datetime.datetime.now()
                 try:
                     parser = Parser_class.YouTube_Parser(url, multiproc=True)
-                    parser.run()
+                    parser.run(pipe_client)
 
                     print("статистика:")
                     print(len(parser.all_video_data_list))
@@ -93,19 +105,31 @@ def func_button_pars_file(href_list):
                     # print("Неожиданная ошибка")
                     raise
                 print(f"Время на парсинг {url} = {datetime.datetime.now() - start}")
+        print("Все каналы обработаны")
 
 
-def func_pars(radiobutton: tkinter.IntVar, data: tkinter.Entry, text: tkinter.Text, process_list):
+def f1(server, text):
+    while True:
+        x = server.recv()
+        if x != "Конец":
+            text.insert(tkinter.END, x + "\n")
+        else:
+            text.insert(tkinter.END, "Конец")
+            return
+
+
+def func_pars(radiobutton: tkinter.IntVar, data: tkinter.Entry, text: tkinter.Text):
     data = data.get()
 
     rad = radiobutton.get()
     # data = validate(rad, data)
+    pipe_server, pipe_client = mp.Pipe()
 
     match rad:
         case 0:
             text.insert(1.0, "Проверка ссылки...\n")
             url = validate_url(data)
-            p = mp.Process(target=func_button_pars_url, args=(url,))
+            p = mp.Process(target=func_button_pars_url, args=(url, pipe_client), name="solo_parser")
             process_list.append(p)
             p.start()
         case 1:
@@ -113,8 +137,8 @@ def func_pars(radiobutton: tkinter.IntVar, data: tkinter.Entry, text: tkinter.Te
                 raise my_exception.Not_file
             href_list = validate_file(data)
             text.insert(1.0, "Проверка файла...\n")
-            # p = mp.Process(target=func_button_pars_url, args=(url,))
-            # process_list.append(p)
-            # p.start()
-            print(href_list)
-
+            p = mp.Process(target=func_button_pars_file, args=(href_list, pipe_client))
+            process_list.append(p)
+            p.start()
+            # print(href_list)
+    threading.Thread(target=f1, args=(pipe_server, text), daemon=True).start()
