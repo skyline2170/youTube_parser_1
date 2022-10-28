@@ -1,6 +1,4 @@
-import multiprocessing
 import threading
-
 import Parser_class
 import tkinter
 import my_exception
@@ -74,6 +72,8 @@ def func_button_pars_url(url, pipe_client):
             # print("Неожиданная ошибка")
             raise
         print(f"Время на парсинг {url} = {datetime.datetime.now() - start}")
+        pipe_client.send("Конец")
+        pipe_client.close()
 
 
 def func_button_pars_file(href_list, pipe_client):
@@ -105,18 +105,21 @@ def func_button_pars_file(href_list, pipe_client):
                     # print("Неожиданная ошибка")
                     raise
                 print(f"Время на парсинг {url} = {datetime.datetime.now() - start}")
+            pipe_client.send("-" * 20)
         print("Все каналы обработаны")
+        pipe_client.send("Конец")
+        pipe_client.close()
 
 
-def f1(server, text):
+def progres_checker(server, text, data):
     while True:
         x = server.recv()
         if x != "Конец":
             text.insert(tkinter.END, x + "\n")
         else:
-            text.insert(tkinter.END, "Конец")
+            text.insert(tkinter.END, f"Парсинг {data} закончен.")
+            server.close()
             return
-
 
 
 def func_pars(radiobutton: tkinter.IntVar, data: tkinter.Entry, text: tkinter.Text):
@@ -142,4 +145,4 @@ def func_pars(radiobutton: tkinter.IntVar, data: tkinter.Entry, text: tkinter.Te
             process_list.append(p)
             p.start()
             # print(href_list)
-    threading.Thread(target=f1, args=(pipe_server, text), daemon=True).start()
+    threading.Thread(target=progres_checker, args=(pipe_server, text, data), daemon=True).start()

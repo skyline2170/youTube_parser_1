@@ -32,7 +32,7 @@ class YouTube_Parser:
         self.lost_href_list = []
         self.page_source = None
 
-    def page_scroller(self):
+    def page_scroller(self, pipe_client=None):
         '''Даная функция пролистывает интернет страницу, открытую в драйвере, до самого низа. Основано на подсчёте
         количества ссылок на странице. Если кол-во ссылок не меняется с пролистыванием, то страница пролистана.'''
         start = datetime.datetime.now()
@@ -46,18 +46,24 @@ class YouTube_Parser:
                 check += 1
                 if check > 3:
                     print("Поиск видео окончен.")
+                    if pipe_client:
+                        pipe_client.send("Поиск видео окончен.")
                     break
             else:
                 now = datetime.datetime.now()
                 if str(now - start) > "0:00:15.000000":
                     start = now
                     print("Поиск продоложается...")
+                    if pipe_client:
+                        pipe_client.send("Поиск продоложается...")
                 k = len(hrefs)
                 self.__driver.execute_script("window.scrollBy(0,1000000);")
 
-    def get_hrefs(self):
+    def get_hrefs(self, pipe_client=None):
         ''''Данныя функция получает все ссылки на видео со страницы, открытой в драйвере, и сохраняет их в self.href_list'''
         print("Получение ссылок...")
+        if pipe_client:
+            pipe_client.send("Получение ссылок...")
         html_page = self.__driver.find_element(By.XPATH, '//*[@id="contents"]')  # находим div блок с видео
         # html_page = html_page.find_element(By.TAG_NAME, 'div')
         # print(f"{html_page.get_attribute('id')}")
@@ -82,7 +88,9 @@ class YouTube_Parser:
         # if self.href_list[0] == None:
         #     print("cсылки не полученны")
         # i.get_attribute("id") == "video-title"])  # забираем у всех ссылок атрибут href
-        print(F"Полученно {len(self.href_list)} ссылок на видео. ")
+        print(f"Полученно {len(self.href_list)} ссылок на видео.")
+        if pipe_client:
+            pipe_client.send(f"Полученно {len(self.href_list)} ссылок на видео.")
         # print(self.href_list)
         return True
 
@@ -101,12 +109,12 @@ class YouTube_Parser:
             self.__driver.find_element(By.XPATH,
                                        '//*[@id="tabsContent"]/tp-yt-paper-tab[2]/div').click()  # Переход на вкладку видео
 
-            self.page_scroller()  # пролистываем страницу до конца
+            self.page_scroller(pipe_client=pipe_client)  # пролистываем страницу до конца
             self.page_source = self.__driver.page_source
             # with open("../data/htlm.txt", "w", encoding="utf-8") as file:
             #     file.write(self.page_source)
 
-            check = self.get_hrefs()
+            check = self.get_hrefs(pipe_client=pipe_client)
 
             # print("set",set(self.href_list))
             # print(len(set(self.href_list)))
@@ -116,8 +124,8 @@ class YouTube_Parser:
                 self.href_list.clear()
                 check = self.get_hrefs()
             if pipe_client:
-                pipe_client.send(f"Ссылки полученны")
-
+                # pipe_client.send(f"Ссылки полученны")
+                pipe_client.send("Получение данных всех видео")
             if self.__multiproc == False:
                 self.pars_title_description()
             elif self.__multiproc == True:
@@ -125,15 +133,18 @@ class YouTube_Parser:
             elif self.__multiproc == None:
                 pass
 
-            self.lost_video_checker()
+            self.lost_video_checker(pipe_client=pipe_client)
+
             if pipe_client:
                 pipe_client.send(f"Запись результатов в таблицу Excel")
             if self.all_video_data_list and self.__multiproc != None:
-                self.write_to_excel()
+                self.write_result()
             # print(f"время: {datetime.datetime.now() - start}")
 
         except NoSuchElementException:
             print("Ошибка Youtube. Повторное подключение.")
+            if pipe_client:
+                pipe_client.send("Ошибка Youtube. Повторное подключение.")
             time.sleep(10)
             self.run_check += 1
             if self.__driver:
@@ -141,20 +152,23 @@ class YouTube_Parser:
             if self.run_check < 5:
                 self.run()
             else:
-                print("Ошибка подключения")
+                print("Ошибка подключения.")
+                if pipe_client:
+                    pipe_client.send("Ошибка подключения.")
         except urllib3.exceptions.NewConnectionError:
             print("Странная ошибка.")
         except:
             raise
         finally:
             print("-" * 40)
-            pipe_client.send(f"Конец")
             if self.__driver:
                 self.__exit_driver()
 
-    def lost_video_checker(self):
+    def lost_video_checker(self, pipe_client=None):
         lost = len(self.lost_href_list)
         print(f"Потери {lost}.")
+        if pipe_client:
+            pipe_client.send(f"Потери {lost}.")
         time.sleep(0.3)
         if lost:
             self.href_list = self.lost_href_list.copy()
@@ -162,6 +176,8 @@ class YouTube_Parser:
             self.pars_title_description(extend_data=True)
             lost2 = len(self.lost_href_list)
             print(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
+            if pipe_client:
+                pipe_client.send(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
             lost = len(self.lost_href_list)
             if lost:
                 self.href_list = self.lost_href_list.copy()
@@ -169,6 +185,8 @@ class YouTube_Parser:
                 self.pars_title_description(extend_data=True)
                 lost2 = len(self.lost_href_list)
                 print(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
+                if pipe_client:
+                    pipe_client.send(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
                 lost = len(self.lost_href_list)
                 if lost:
                     self.href_list = self.lost_href_list.copy()
@@ -176,6 +194,8 @@ class YouTube_Parser:
                     self.pars_title_description(extend_data=True)
                     lost2 = len(self.lost_href_list)
                     print(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
+                    if pipe_client:
+                        pipe_client.send(f"Сново потеряно:{lost2}.\nУдалось вернуть: {abs(lost2 - lost)}")
 
     def pars_title_description(self, extend_data=False):
         print("Получение данных.")
@@ -228,6 +248,9 @@ class YouTube_Parser:
                         self.lost_href_list.append(href)
                 except urllib3.exceptions.ConnectTimeoutError:
                     print("Time out")
+                    self.lost_href_list.append(href)
+                except urllib3.exceptions.NewConnectionError:
+                    print("Потеряно соединение с интернетом.")
                     self.lost_href_list.append(href)
             # print(self.all_video_data)
             # self.write_to_excel()
@@ -287,6 +310,9 @@ class YouTube_Parser:
         except urllib3.exceptions.ConnectTimeoutError:
             print("Time out")
             y.append(href)
+        except urllib3.exceptions.NewConnectionError:
+            print("Потеряно соединение с интернетом.")
+            y.append(href)
 
     def pars_title_description_multiprocess(self, extend_data=False):
         print("Получение данных.")
@@ -299,7 +325,7 @@ class YouTube_Parser:
                 href_list = [(session, i, x, y, self.find_problem_discription) for i in self.href_list]
 
                 with multiprocessing.Pool(multiprocessing.cpu_count() * 3) as pool:
-                    pool.starmap(self.process, href_list)
+                    pool.starmap(self.process, (href_list))
                     pool.close()
                     pool.join()
 
@@ -319,9 +345,11 @@ class YouTube_Parser:
         with open(f"{path}/потеряные ссылки.txt", "w", encoding="utf-8") as file:
             file.writelines(data_list)
 
-    def write_to_excel(self):
-        dir_name = self.__chanal_url.removeprefix('https://www.youtube.com/c/')
-        dir_name = dir_name.replace("/", "_")
+    def write_result(self):
+        # https: // www.youtube.com / user / Wylsacom
+        dir_name = self.__chanal_url.removeprefix('https://www.youtube.com/')
+        dir_name = dir_name.split("/")[-1]
+        # dir_name = dir_name.replace("/", "_")
         time = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
         if not os.path.exists(f"../data/{dir_name}"):
             os.mkdir(f"../data/{dir_name}")
@@ -362,7 +390,7 @@ class YouTube_Parser:
     #         writer = csv.writer(file)
     #         writer.writerow(data)
 
-    def __create_driver(self, driver_path: str = "../chromedriver.exe"):
+    def __create_driver(self, driver_path: str = "../chromedriver.exe", pipe_client=None):
         if os.path.exists(driver_path):
             driver_options = webdriver.ChromeOptions()
             driver_options.add_argument("--headless")
@@ -374,6 +402,8 @@ class YouTube_Parser:
             return driver
         else:
             print("Веб драйвера не обнаружено, проверте правильно ли указан путь до него.")
+            if pipe_client:
+                pipe_client.send("Веб драйвер не обнаружен, проверте правильно ли указан путь до него.")
 
     def __create_session(self):
         session = req.Session()

@@ -1,19 +1,15 @@
 import cProfile
-import datetime
 import pstats
 import tkinter as tk
-from tkinter import messagebox as mb
 from tkinter import filedialog as fd
 import controler
-import threading as th
 import my_exception
-from loguru import logger
-import multiprocessing as mp
+
 
 root = tk.Tk()
 root.title("YouTube Parser")
-# root.resizable(False, False)
-root.geometry("550x350+100+100")
+root.resizable(False, False)
+root.geometry("550x370+100+100")
 
 
 def func_button_pars(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
@@ -25,7 +21,6 @@ def func_button_pars(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
     except FileNotFoundError:
         text_palace.insert(1.0, "Не правильный путь к файлу.")
     except IndexError:
-        # raise
         text_palace.insert(1.0, "Вы не ввели ссылку.")
     except my_exception.Sruct_File_Error:
         text_palace.insert(1.0, "Не верная структура файла.")
@@ -34,14 +29,13 @@ def func_button_pars(text_palace: tk.Text, entry: tk.Entry, rad: tk.IntVar):
     except OSError:
         text_palace.insert(1.0, "Не правильный путь к файлу.")
     except:
-        # text_palace.insert(1.0, "Не предвиденная ошибка.")
-        raise
+        text_palace.insert(1.0, "Не предвиденная ошибка.")
 
-    # controler.func_pars(rad, entry)
+
+
 
 
 def func_button_cancel():
-    # print(process_list)
     controler.kill_process()
 
 
