@@ -4,7 +4,7 @@ import datetime
 import multiprocessing
 import os.path
 import time
-
+import my_exception
 import openpyxl
 
 import urllib3
@@ -40,7 +40,7 @@ class YouTube_Parser:
         check = 0
         while True:  # цикл пролистывает страницу до конца
             # time.sleep(3)
-            time.sleep(0.5)
+            time.sleep(1)
             hrefs = self.__driver.find_elements(By.TAG_NAME, "a")
             if len(hrefs) == k:
                 check += 1
@@ -53,7 +53,7 @@ class YouTube_Parser:
                 now = datetime.datetime.now()
                 if str(now - start) > "0:00:15.000000":
                     start = now
-                    print("Поиск продоложается...")
+                    print("Поиск продолжается...")
                     if pipe_client:
                         pipe_client.send("Поиск продоложается...")
                 k = len(hrefs)
@@ -68,12 +68,17 @@ class YouTube_Parser:
         # html_page = html_page.find_element(By.TAG_NAME, 'div')
         # print(f"{html_page.get_attribute('id')}")
         html_page = html_page.find_elements(By.ID, "details")
-
+        print(f"{len(html_page)=}")
         # html_page = html_page.find_elements(By.TAG_NAME, "h3")
         # print(html_page)
         self.href_list = [i.find_element(By.TAG_NAME, "h3") for i in html_page]
-        self.href_list = [i.find_element(By.TAG_NAME, "a") for i in html_page]
+
+        self.href_list = [i.find_element(By.TAG_NAME, "a") for i in self.href_list]
         # print("href[0]", self.href_list[0].get_attribute("href"))
+
+        # print("чек:")
+        # print(self.href_list[0].get_attribute("href"))
+        # print("чек")
 
         if self.href_list[0].get_attribute("href") == None:
             return None
@@ -115,7 +120,9 @@ class YouTube_Parser:
             #     file.write(self.page_source)
 
             check = self.get_hrefs(pipe_client=pipe_client)
-            print(self.href_list)
+
+            # print(self.href_list)
+            # print(f"{check=}")
             # print("set",set(self.href_list))
             # print(len(set(self.href_list)))
 
@@ -125,6 +132,11 @@ class YouTube_Parser:
                     pipe_client.send("Повтор получения ссылок.")
                 self.href_list.clear()
                 check = self.get_hrefs()
+
+            if check == None:
+                print("Нет ссылок.")
+                raise my_exception.Not_url
+
             if pipe_client:
                 # pipe_client.send(f"Ссылки полученны")
                 pipe_client.send("Получение данных всех видео")
@@ -165,7 +177,6 @@ class YouTube_Parser:
             print("-" * 40)
             if self.__driver:
                 self.__exit_driver()
-
 
     def lost_video_checker(self, pipe_client=None):
         lost = len(self.lost_href_list)
@@ -281,7 +292,6 @@ class YouTube_Parser:
 
     @staticmethod
     def process(session, href, x: list, y: list, func):
-        print(multiprocessing.current_process)
         try:
             response = session.get(href, timeout=10)
             if response.ok:
@@ -327,7 +337,6 @@ class YouTube_Parser:
                 x = manager.list()
                 y = manager.list()
                 href_list = [(session, i, x, y, self.find_problem_discription) for i in self.href_list]
-                print("жопа")
                 with multiprocessing.Pool(multiprocessing.cpu_count() * 3) as pool:
                     pool.starmap(func=self.process, iterable=href_list)
                     pool.close()
@@ -425,11 +434,11 @@ class YouTube_Parser:
 def main():
     all_start = datetime.datetime.now()
     check_list = (
-        "https://www.youtube.com/c/MeDallisTRoyale",
+        # "https://www.youtube.com/c/MeDallisTRoyale",
         # "https://www.youtube.com/c/SuperCrastan",
         # "https://www.youtube.com/c/JoeSpeen",
         #               "https://www.youtube.com/c/ZProgerIT",
-        #               "https://www.youtube.com/c/Redlyy",
+        "https://www.youtube.com/c/Redlyy",
         #               "https://www.youtube.com/c/QuantumGames",
         #               "https://www.youtube.com/c/PhysicsisSimple"
         #               "https://www.youtube.com/c/gosha_dudar",
@@ -476,4 +485,4 @@ if __name__ == '__main__':
     profile.enable()
     main()
     profile.disable()
-    print(pstats.Stats(profile).strip_dirs())
+    pstats.Stats(profile).strip_dirs().sort_stats("tottime").print_stats()

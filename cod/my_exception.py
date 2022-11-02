@@ -1,5 +1,4 @@
 class Url_Error_Domen(Exception):
-    # "https://www.youtube.com/c/MeDallisTRoyale"
     def __init__(self, url):
         if url:
             self.message = url
@@ -38,6 +37,7 @@ class Sruct_File_Error(Exception):
         if self.message:
             return "Файл с не правильной структурой. Файл не содержит списка ссылок."
 
+
 class Not_file(Exception):
     def __init__(self, *args):
         if args:
@@ -48,3 +48,11 @@ class Not_file(Exception):
     def __str__(self):
         if self.message:
             return "Файл не выбран."
+
+
+class Not_url(Exception):
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return "Не удалось получить ссылки так как отсутствует атрибут href"
