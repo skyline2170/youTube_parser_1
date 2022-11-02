@@ -115,12 +115,14 @@ class YouTube_Parser:
             #     file.write(self.page_source)
 
             check = self.get_hrefs(pipe_client=pipe_client)
-
+            print(self.href_list)
             # print("set",set(self.href_list))
             # print(len(set(self.href_list)))
 
             if check == None:
                 print("Повтор получения ссылок.")
+                if pipe_client:
+                    pipe_client.send("Повтор получения ссылок.")
                 self.href_list.clear()
                 check = self.get_hrefs()
             if pipe_client:
@@ -163,6 +165,7 @@ class YouTube_Parser:
             print("-" * 40)
             if self.__driver:
                 self.__exit_driver()
+
 
     def lost_video_checker(self, pipe_client=None):
         lost = len(self.lost_href_list)
@@ -278,6 +281,7 @@ class YouTube_Parser:
 
     @staticmethod
     def process(session, href, x: list, y: list, func):
+        print(multiprocessing.current_process)
         try:
             response = session.get(href, timeout=10)
             if response.ok:
@@ -323,9 +327,9 @@ class YouTube_Parser:
                 x = manager.list()
                 y = manager.list()
                 href_list = [(session, i, x, y, self.find_problem_discription) for i in self.href_list]
-
+                print("жопа")
                 with multiprocessing.Pool(multiprocessing.cpu_count() * 3) as pool:
-                    pool.starmap(self.process, (href_list))
+                    pool.starmap(func=self.process, iterable=href_list)
                     pool.close()
                     pool.join()
 
@@ -351,6 +355,8 @@ class YouTube_Parser:
         dir_name = dir_name.split("/")[-1]
         # dir_name = dir_name.replace("/", "_")
         time = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
+        if not os.path.exists("../data"):
+            os.mkdir(f"../data")
         if not os.path.exists(f"../data/{dir_name}"):
             os.mkdir(f"../data/{dir_name}")
         os.mkdir(f"../data/{dir_name}/{time}")
@@ -393,7 +399,7 @@ class YouTube_Parser:
     def __create_driver(self, driver_path: str = "../chromedriver.exe", pipe_client=None):
         if os.path.exists(driver_path):
             driver_options = webdriver.ChromeOptions()
-            driver_options.add_argument("--headless")
+            # driver_options.add_argument("--headless")
 
             driver_options.add_argument("--disable-blink-features=AutoControled")
             driver_options.add_argument(f"user-agent={self.__user_agent.chrome}")
@@ -415,21 +421,13 @@ class YouTube_Parser:
             # self.__driver.close()
             self.__driver.quit()
 
-    # def __del__(self):
-    #     if self.__driver:
-    #         self.__exit_driver()
-
 
 def main():
     all_start = datetime.datetime.now()
     check_list = (
         "https://www.youtube.com/c/MeDallisTRoyale",
-        # "https://www.youtube.com/с/Wylsacom",
-        # "https://www.youtube.com/с/AcademeG",
         # "https://www.youtube.com/c/SuperCrastan",
-        # "https://www.youtube.com/с/UCBUPvbjvN6Raly2FL14xoYw",
         # "https://www.youtube.com/c/JoeSpeen",
-        # "https://www.youtube.com/c/UCfFkXO1Tfk6Je9O5h-dvLoA",
         #               "https://www.youtube.com/c/ZProgerIT",
         #               "https://www.youtube.com/c/Redlyy",
         #               "https://www.youtube.com/c/QuantumGames",
@@ -465,31 +463,17 @@ def main():
                 print("Неожиданная ошибка")
                 raise
             print(f"Время на парсинг {url} = {datetime.datetime.now() - start}")
-
-    token = "5226592225:AAGuyEtD_FOotorITU45tTNOLWhEcR2htVA"
-    chat_id = "488216212"
-    res = req.get("https://api.telegram.org/bot" + token + "/sendMessage",
-                  params={"chat_id": chat_id, "text": "программа завершена"})
     print("-" * 10)
-    print(f"{res.ok=}")
     print("программа завершена!")
     print("затрачено времени:", datetime.datetime.now() - all_start)
-    # for i in range(15):
-    # x = YouTube_Parser("https://www.youtube.com/c/MeDallisTRoyale")
-    # r = x.pars_title_description(("https://www.youtube.com/watch?v=yOvvtKRBzQU",))
-    # del x
 
 
 if __name__ == '__main__':
-    # import pstats
-    #
-    # # cProfile.run("main()", sort="cumtime")
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-    # main()
-    # profiler.disable()
-    # stat = pstats.Stats(profiler).sort_stats("cumtime")
-    # stat.strip_dirs()
-    # stat.print_stats()
-    # stat.dump_stats("1.prof")
+    import cProfile
+    import pstats
+
+    profile = cProfile.Profile()
+    profile.enable()
     main()
+    profile.disable()
+    print(pstats.Stats(profile).strip_dirs())
