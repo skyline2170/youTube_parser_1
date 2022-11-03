@@ -93,4 +93,4 @@ if __name__ == '__main__':
     profiler.enable()
     root.mainloop()
     profiler.disable()
-    print(pstats.Stats(profiler).sort_stats("ncalls").strip_dirs())
+    pstats.Stats(profiler).sort_stats("ncalls").strip_dirs().print_stats()

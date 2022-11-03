@@ -26,7 +26,7 @@ class YouTube_Parser:
         self.__multiproc = multiproc
         self.__chanal_url = url
         self.__user_agent = fake_useragent.UserAgent()
-        self.__driver = None
+        self.driver = None
         self.href_list = []
         self.all_video_data_list = []
         self.lost_href_list = []
@@ -41,7 +41,7 @@ class YouTube_Parser:
         while True:  # цикл пролистывает страницу до конца
             # time.sleep(3)
             time.sleep(1)
-            hrefs = self.__driver.find_elements(By.TAG_NAME, "a")
+            hrefs = self.driver.find_elements(By.TAG_NAME, "a")
             if len(hrefs) == k:
                 check += 1
                 if check > 3:
@@ -57,14 +57,14 @@ class YouTube_Parser:
                     if pipe_client:
                         pipe_client.send("Поиск продоложается...")
                 k = len(hrefs)
-                self.__driver.execute_script("window.scrollBy(0,1000000);")
+                self.driver.execute_script("window.scrollBy(0,1000000);")
 
     def get_hrefs(self, pipe_client=None):
         ''''Данныя функция получает все ссылки на видео со страницы, открытой в драйвере, и сохраняет их в self.href_list'''
         print("Получение ссылок...")
         if pipe_client:
             pipe_client.send("Получение ссылок...")
-        html_page = self.__driver.find_element(By.XPATH, '//*[@id="contents"]')  # находим div блок с видео
+        html_page = self.driver.find_element(By.XPATH, '//*[@id="contents"]')  # находим div блок с видео
         # html_page = html_page.find_element(By.TAG_NAME, 'div')
         # print(f"{html_page.get_attribute('id')}")
         html_page = html_page.find_elements(By.ID, "details")
@@ -103,19 +103,19 @@ class YouTube_Parser:
         # '''Данная фукнция '''
 
         try:
-            self.__driver = self.__create_driver()
+            self.driver = self.create_driver()
             print("-" * 40)
             print(f"Идёт поиск всех видео канала {self.__chanal_url}.")
             if pipe_client:
                 pipe_client.send(f"Идёт поиск всех видео канала {self.__chanal_url}.")
 
-            self.__driver.get(self.__chanal_url)  # Получение страницы по указанному url
+            self.driver.get(self.__chanal_url)  # Получение страницы по указанному url
             time.sleep(10)
-            self.__driver.find_element(By.XPATH,
-                                       '//*[@id="tabsContent"]/tp-yt-paper-tab[2]/div').click()  # Переход на вкладку видео
+            self.driver.find_element(By.XPATH,
+                                     '//*[@id="tabsContent"]/tp-yt-paper-tab[2]/div').click()  # Переход на вкладку видео
 
             self.page_scroller(pipe_client=pipe_client)  # пролистываем страницу до конца
-            self.page_source = self.__driver.page_source
+            self.page_source = self.driver.page_source
             # with open("../data/htlm.txt", "w", encoding="utf-8") as file:
             #     file.write(self.page_source)
 
@@ -161,7 +161,7 @@ class YouTube_Parser:
                 pipe_client.send("Ошибка Youtube. Повторное подключение.")
             time.sleep(10)
             self.run_check += 1
-            if self.__driver:
+            if self.driver:
                 self.__exit_driver()
             if self.run_check < 5:
                 self.run()
@@ -175,7 +175,7 @@ class YouTube_Parser:
             raise
         finally:
             print("-" * 40)
-            if self.__driver:
+            if self.driver:
                 self.__exit_driver()
 
     def lost_video_checker(self, pipe_client=None):
@@ -405,7 +405,7 @@ class YouTube_Parser:
     #         writer = csv.writer(file)
     #         writer.writerow(data)
 
-    def __create_driver(self, driver_path: str = "../chromedriver.exe", pipe_client=None):
+    def create_driver(self, driver_path: str = "../chromedriver.exe", pipe_client=None):
         if os.path.exists(driver_path):
             driver_options = webdriver.ChromeOptions()
             # driver_options.add_argument("--headless")
@@ -426,19 +426,19 @@ class YouTube_Parser:
         return session
 
     def __exit_driver(self):
-        if self.__driver:
+        if self.driver:
             # self.__driver.close()
-            self.__driver.quit()
+            self.driver.quit()
 
 
 def main():
     all_start = datetime.datetime.now()
     check_list = (
-        # "https://www.youtube.com/c/MeDallisTRoyale",
+        "https://www.youtube.com/c/MeDallisTRoyale",
         # "https://www.youtube.com/c/SuperCrastan",
         # "https://www.youtube.com/c/JoeSpeen",
         #               "https://www.youtube.com/c/ZProgerIT",
-        "https://www.youtube.com/c/Redlyy",
+        # "https://www.youtube.com/c/Redlyy",
         #               "https://www.youtube.com/c/QuantumGames",
         #               "https://www.youtube.com/c/PhysicsisSimple"
         #               "https://www.youtube.com/c/gosha_dudar",
@@ -480,7 +480,6 @@ def main():
 if __name__ == '__main__':
     import cProfile
     import pstats
-
     profile = cProfile.Profile()
     profile.enable()
     main()
