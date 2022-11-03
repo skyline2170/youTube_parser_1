@@ -408,7 +408,7 @@ class YouTube_Parser:
     def create_driver(self, driver_path: str = "../chromedriver.exe", pipe_client=None):
         if os.path.exists(driver_path):
             driver_options = webdriver.ChromeOptions()
-            # driver_options.add_argument("--headless")
+            driver_options.add_argument("--headless")
 
             driver_options.add_argument("--disable-blink-features=AutoControled")
             driver_options.add_argument(f"user-agent={self.__user_agent.chrome}")
